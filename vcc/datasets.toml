@@ -1,0 +1,104 @@
+# Data sources for autoresearch on the Virtual Cell Challenge 2026.
+#
+# Every [[dataset]] is one raw-count Perturb-seq .h5ad (cells x genes). Download the files
+# yourself, point `path` at them, and check the column names with
+#     uv run prepare.py --inspect /path/to/file.h5ad
+# The column names below are what these releases are expected to use. Verify them before a
+# long ingest: a wrong `pert_col` / `control` silently yields zero perturbations.
+#
+# Fields:
+#   name        unique id
+#   path        raw-count h5ad (read backed, so files larger than RAM are fine)
+#   pert_col    obs column with the knocked-down gene's SYMBOL (same naming as the genes)
+#   control     label of non-targeting control cells in pert_col
+#   gene_col    var column with gene symbols ("" = use var_names)
+#   context     cell-line name used everywhere else (or context_col = obs column, for files
+#               holding several cell lines)
+#   role        "train" (perturbations available; default) or "submit" (controls only, e.g.
+#               the official VCC 2026 NTC files you predict for)
+#   enabled     false to skip an entry
+
+# Held-out contexts: their perturbation data is NEVER shown to train.py; they are the
+# zero-shot validation set `val_score` is computed on (2-3 lines; pick lines unlike your
+# training lines, the way the VCC 2026 lines are unseen).
+[split]
+val = ["RPE1", "HepG2"]
+
+# Gene universe = the official VCC 2026 gene list (18,533 genes), in submission order.
+# Point it at any official VCC 2026 h5ad (or a text file, one symbol per line). If omitted,
+# the union of all datasets' genes is used.
+[genes]
+reference = "~/data/vcc2026/validation_controls_A.h5ad"   # <- fix the file name
+gene_col = ""
+
+# Target panel for "submit" contexts (one gene symbol per line), from the official release.
+[submit]
+targets = "~/data/vcc2026/validation_targets.txt"           # <- fix the file name
+
+# --- Public CRISPRi Perturb-seq (training contexts) -----------------------------------
+
+# Replogle et al. 2022 (Cell): K562 essential-gene screen, raw single-cell counts (figshare).
+[[dataset]]
+name = "replogle_k562_essential"
+path = "~/data/replogle2022/K562_essential_raw_singlecell_01.h5ad"
+pert_col = "gene"
+control = "non-targeting"
+gene_col = "gene_name"
+context = "K562"
+
+# Replogle et al. 2022: K562 genome-wide screen (large; overlaps the essential screen).
+[[dataset]]
+name = "replogle_k562_gwps"
+path = "~/data/replogle2022/K562_gwps_raw_singlecell_01.h5ad"
+pert_col = "gene"
+control = "non-targeting"
+gene_col = "gene_name"
+context = "K562_gwps"
+enabled = false
+
+# Replogle et al. 2022: RPE1 essential-gene screen.
+[[dataset]]
+name = "replogle_rpe1"
+path = "~/data/replogle2022/rpe1_raw_singlecell_01.h5ad"
+pert_col = "gene"
+control = "non-targeting"
+gene_col = "gene_name"
+context = "RPE1"
+
+# Nadig et al. 2025 (Nat Genet): HepG2 and Jurkat essential-gene screens (GEO GSE264667).
+[[dataset]]
+name = "nadig_hepg2"
+path = "~/data/nadig2025/hepg2_raw_singlecell.h5ad"
+pert_col = "gene"
+control = "non-targeting"
+gene_col = "gene_name"
+context = "HepG2"
+
+[[dataset]]
+name = "nadig_jurkat"
+path = "~/data/nadig2025/jurkat_raw_singlecell.h5ad"
+pert_col = "gene"
+control = "non-targeting"
+gene_col = "gene_name"
+context = "Jurkat"
+
+# Virtual Cell Challenge 2025: H1 hESC CRISPRi (the 2025 training set).
+[[dataset]]
+name = "vcc2025_h1"
+path = "~/data/vcc2025/adata_Training.h5ad"
+pert_col = "target_gene"
+control = "non-targeting"
+gene_col = ""
+context = "H1"
+
+# --- Official VCC 2026 controls (what you predict for) --------------------------------
+
+[[dataset]]
+name = "vcc2026_A"
+path = "~/data/vcc2026/validation_controls_A.h5ad"          # <- fix the file name
+pert_col = "target_gene"                                     # <- check with --inspect
+control = "non-targeting"
+gene_col = ""
+context = "VCC_A"
+role = "submit"
+enabled = false

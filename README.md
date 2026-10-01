@@ -80,6 +80,10 @@ Seeing as there seems to be a lot of interest in tinkering with autoresearch on 
 
 I think these would be the reasonable hyperparameters to play with. Ask your favorite coding agent for help and copy paste them this guide, as well as the full source code.
 
+## Virtual Cell Challenge
+
+The [`vcc/`](vcc/) directory applies the same loop to the [Arc Virtual Cell Challenge 2026](https://virtualcellchallenge.org/), which asks for zero-shot prediction of CRISPRi knockdown responses in unseen cell lines. It holds out whole cell lines from public Perturb-seq data, and the agent edits `vcc/train.py` to maximise a fast local re-implementation of the official `cell-eval2` `vcc2026` score. See [`vcc/README.md`](vcc/README.md).
+
 ## Notable forks
 
 - [miolini/autoresearch-macos](https://github.com/miolini/autoresearch-macos) (MacOS)

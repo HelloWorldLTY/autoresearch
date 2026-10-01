@@ -1,0 +1,15 @@
+[project]
+name = "autoresearch-vcc"
+version = "0.1.0"
+description = "Autonomous research loop for the Arc Virtual Cell Challenge 2026 (zero-shot CRISPRi response prediction)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "anndata>=0.10",
+    "cell-eval2==0.16.0",
+    "h5py>=3.10",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pdex>=0.3.0",
+    "scipy>=1.11",
+    "torch>=2.5",
+]
