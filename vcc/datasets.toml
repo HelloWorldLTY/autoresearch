@@ -24,16 +24,20 @@
 [split]
 val = ["RPE1", "HepG2"]
 
-# Gene universe = the official VCC 2026 gene list (18,533 genes), in submission order.
-# Point it at any official VCC 2026 h5ad (or a text file, one symbol per line). If omitted,
-# the union of all datasets' genes is used.
+# Official VCC 2026 data comes from Arc's CLI (`uv tool install vcc-cli`, API key from
+# virtualcellchallenge.org/app/credentials):
+#     echo "$VCC_TOKEN" | vcc login --token-stdin
+#     vcc datasets download controls -d ~/vcc && unzip -o ~/vcc/vcc_2026_controls.zip -d ~/vcc
+#
+# Gene universe = the official gene list (18,533 genes, submission order). A .csv/.txt list
+# or any h5ad works. If omitted, the union of all datasets' genes is used.
 [genes]
-reference = "~/data/vcc2026/validation_controls_A.h5ad"   # <- fix the file name
+reference = "~/vcc/gene_names.csv"
 gene_col = ""
 
-# Target panel for "submit" contexts (one gene symbol per line), from the official release.
+# Target panel for "submit" contexts: the official pert_counts.csv (`target_gene` column).
 [submit]
-targets = "~/data/vcc2026/validation_targets.txt"           # <- fix the file name
+targets = "~/vcc/pert_counts.csv"
 
 # --- Public CRISPRi Perturb-seq (training contexts) -----------------------------------
 
@@ -92,13 +96,15 @@ gene_col = ""
 context = "H1"
 
 # --- Official VCC 2026 controls (what you predict for) --------------------------------
+# Contexts are named by the control file's `context` labels (A/B/C now, D/E/F in the final
+# phase): submit.py writes those labels back, which is how the scorer pairs predictions with
+# ground truth. If the bundle has one h5ad per context, add one entry each with `context = "A"`.
 
 [[dataset]]
-name = "vcc2026_A"
-path = "~/data/vcc2026/validation_controls_A.h5ad"          # <- fix the file name
+name = "vcc2026_controls"
+path = "~/vcc/controls.h5ad"                                 # <- the h5ad inside the zip
 pert_col = "target_gene"                                     # <- check with --inspect
 control = "non-targeting"
 gene_col = ""
-context = "VCC_A"
+context_col = "context"
 role = "submit"
-enabled = false

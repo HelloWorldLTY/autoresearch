@@ -91,6 +91,40 @@ Re-check on real data with `uv run official_eval.py`. It rebuilds the held-out c
 
 ## Submitting
 
-Add the official control files as `role = "submit"` datasets and set `[submit] targets` before running `prepare.py`. After a `train.py` run, `uv run submit.py --combined` writes the h5ad files. Each context gets 400 integer-count cells per target on the full gene list. Check the official submission instructions for the exact obs column names and layout, and use the flags to match them.
+1. Get the official data with Arc's CLI. Generate an API key at virtualcellchallenge.org/app/credentials, then:
 
-The way predictions become cells (`prepare.emit_cells`) is fixed, so the local score matches what is submitted. Smarter emission is a possible human-level lever. One example is choosing control cells so the emitted means match the prediction more exactly. If you change it, change it in `prepare.py`, so the scorer and the submission stay consistent.
+   ```bash
+   uv tool install vcc-cli
+   export VCC_TOKEN=...          # or: echo "$VCC_TOKEN" | vcc login --token-stdin
+   vcc datasets download controls -d ~/vcc && unzip -o ~/vcc/vcc_2026_controls.zip -d ~/vcc
+   ```
+
+2. Point `datasets.toml` at the bundle:
+   - `[genes] reference = gene_names.csv`
+   - `[submit] targets = pert_counts.csv`
+   - the controls h5ad as a `role = "submit"` dataset, with contexts named by its `context` labels (A/B/C)
+
+   Then run `prepare.py`.
+
+3. After a `train.py` run, write and submit the file:
+
+   ```bash
+   uv run submit.py
+   vcc prep ~/.cache/autoresearch-vcc/submission/vcc_submission.h5ad \
+       -g ~/vcc/gene_names.csv --perts ~/vcc/pert_counts.csv -o prediction.vcc
+   vcc submit prediction.vcc -m "autoresearch $(git rev-parse --short HEAD)" --wait
+   ```
+
+`submit.py` writes the format `vcc prep` checks:
+
+- one file with all contexts
+- obs `target_gene` and `context`
+- 400 integer-count cells per target
+- no control cells
+- genes in `gene_names.csv` order
+
+On synthetic data, `vcc prep` accepts it. For the final phase, the contexts are D/E/F (`vcc prep --contexts D,E,F`).
+
+Keep the API key out of the repo and out of `datasets.toml`.
+
+The way predictions become cells (`prepare.emit_cells`) is fixed, so the local score matches what is submitted. Smarter emission is a possible human-level lever, such as choosing control cells so the emitted means match the prediction more exactly. If you change it, change it in `prepare.py`, so the scorer and the submission stay consistent.

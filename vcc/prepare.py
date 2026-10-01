@@ -73,6 +73,23 @@ def _read_lines(path):
         return [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
 
 
+_LIST_HEADERS = {"gene_name", "gene", "gene_symbol", "gene_names", "genes", "target_gene"}
+
+
+def _read_list(path, column=None):
+    """One name per line, or the official VCC CSVs: gene_names.csv (one column, header optional)
+    and pert_counts.csv (a `target_gene` column)."""
+    if path.endswith(".csv"):
+        import pandas as pd
+        frame = pd.read_csv(os.path.expanduser(path), header=None, dtype=str)
+        if frame.iloc[0].str.strip().str.lower().isin(_LIST_HEADERS | {"n_cells", "context"}).any():
+            frame.columns = frame.iloc[0].str.strip()
+            frame = frame.iloc[1:]
+        col = column if column in frame.columns else frame.columns[0]
+        return [v.strip() for v in frame[col].dropna().astype(str)]
+    return _read_lines(path)
+
+
 def _gene_symbols(adata, gene_col):
     if gene_col:
         return np.asarray(adata.var[gene_col].astype(str).values)
@@ -90,7 +107,7 @@ def build_gene_universe(cfg, sources):
             genes = _gene_symbols(a, cfg["genes"].get("gene_col", ""))
             a.file.close()
         else:
-            genes = np.array(_read_lines(ref))
+            genes = np.array(_read_list(ref))
         _, first = np.unique(genes, return_index=True)
         return genes[np.sort(first)]
     allg = set()
@@ -402,7 +419,8 @@ def load_submit_tasks():
         if meta["role"] == "submit":
             if not targets_file or not os.path.exists(targets_file):
                 raise ValueError("submit contexts need `[submit] targets = <file>` in the config (one gene per line)")
-            tasks.append(Task(context=c, targets=np.array(_read_lines(targets_file))))
+            targets = np.array(list(dict.fromkeys(_read_list(targets_file, column="target_gene"))))
+            tasks.append(Task(context=c, targets=targets[targets != CONTROL_LABEL]))
     return tasks
 
 # ---------------------------------------------------------------------------
@@ -856,7 +874,8 @@ def save_predictions(preds, kind):
 def make_synthetic(out_dir, n_genes=2000, n_targets=500, seed=0):
     """Small CRISPRi-like Perturb-seq datasets with structure shared across cell lines.
 
-    Five cell lines (SYN_A..SYN_E) plus a controls-only one (SYN_F). A knockdown's response
+    Five perturbed cell lines (SYN_A..SYN_E) plus an official-style controls bundle: one h5ad
+    of control cells for contexts A/B/C, gene_names.csv and pert_counts.csv. A knockdown's response
     is a context-specific generic stress response plus a target-specific program shared
     across lines (gain-modulated by each line's basal expression), plus the knockdown itself.
     Only for checking that the pipeline runs: it says nothing about real biology.
@@ -875,13 +894,16 @@ def make_synthetic(out_dir, n_genes=2000, n_targets=500, seed=0):
     os.makedirs(out_dir, exist_ok=True)
     toml = ['# synthetic smoke-test config written by `prepare.py --synthetic`', '',
             '[split]', 'val = ["SYN_D", "SYN_E"]', '',
-            '[submit]', f'targets = "{os.path.join(out_dir, "targets.txt")}"', '']
-    for k, name in enumerate(["SYN_A", "SYN_B", "SYN_C", "SYN_D", "SYN_E", "SYN_F"]):
+            '[genes]', f'reference = "{os.path.join(out_dir, "gene_names.csv")}"', '',
+            '[submit]', f'targets = "{os.path.join(out_dir, "pert_counts.csv")}"', '']
+    controls = []
+    for k, name in enumerate(["SYN_A", "SYN_B", "SYN_C", "SYN_D", "SYN_E", "A", "B", "C"]):
+        submit = len(name) == 1
         b = base * rng.lognormal(0, 0.5, G)
         b /= b.sum()
         gain = 0.6 + 0.8 * rng.random() + 0.2 * np.tanh(np.log(b * G))
         generic = common_generic + rng.normal(0, 0.08, G)
-        npert = 0 if name == "SYN_F" else int(rng.integers(250, 450))
+        npert = 0 if submit else int(rng.integers(250, 450))
         chosen = rng.choice(n_targets, npert, replace=False)
         n_cells_p, n_ctrl = 60, 1200
         X, lab = [], []
@@ -899,14 +921,21 @@ def make_synthetic(out_dir, n_genes=2000, n_targets=500, seed=0):
             X.append(cells(p, n_cells_p)); lab += [genes[targets[j]]] * n_cells_p
         A = ad.AnnData(sp.vstack(X).tocsr(), obs=pd.DataFrame({"target_gene": lab}, index=[f"{name}_{i}" for i in range(len(lab))]),
                        var=pd.DataFrame(index=genes))
+        if submit:
+            A.obs["context"] = name
+            controls.append(A)
+            continue
         path = os.path.join(out_dir, f"{name}.h5ad")
         A.write_h5ad(path)
         toml += ['[[dataset]]', f'name = "{name}"', f'path = "{path}"', 'pert_col = "target_gene"',
-                 'control = "non-targeting"', f'context = "{name}"', 'gene_col = ""',
-                 f'role = "{"submit" if name == "SYN_F" else "train"}"', '']
+                 'control = "non-targeting"', f'context = "{name}"', 'gene_col = ""', '']
         print(f"  wrote {path}: {A.n_obs} cells, {npert} perturbations")
-    with open(os.path.join(out_dir, "targets.txt"), "w") as f:
-        f.write("\n".join(genes[targets[:100]]) + "\n")
+    path = os.path.join(out_dir, "controls.h5ad")
+    ad.concat(controls).write_h5ad(path)
+    toml += ['[[dataset]]', 'name = "controls"', f'path = "{path}"', 'pert_col = "target_gene"',
+             'control = "non-targeting"', 'context_col = "context"', 'gene_col = ""', 'role = "submit"', '']
+    pd.DataFrame({"gene_name": genes}).to_csv(os.path.join(out_dir, "gene_names.csv"), index=False)
+    pd.DataFrame({"target_gene": genes[targets[:100]]}).to_csv(os.path.join(out_dir, "pert_counts.csv"), index=False)
     cfg = os.path.join(out_dir, "datasets.toml")
     with open(cfg, "w") as f:
         f.write("\n".join(toml))
